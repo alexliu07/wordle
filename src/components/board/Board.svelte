@@ -24,8 +24,8 @@
 
 	let rows: Row[] = [];
 	let showCtx = false;
-	let pAns = 0;
-	let pSols = 0;
+	let possibleSolutions = 0; // The number of words that could be the final answer
+	let validGuesses = 0; // possibleSolutions + the number of words that could be valid guesses but can't be the final answer
 	let x = 0;
 	let y = 0;
 	let word = "";
@@ -38,8 +38,8 @@
 			word = guesses > num ? val : "";
 
 			const match = getRowData(num, board);
-			pAns = words.words.filter((w) => match(w)).length;
-			pSols = pAns + words.valid.filter((w) => match(w)).length;
+			possibleSolutions = words.words.filter((w) => match(w)).length;
+			validGuesses = possibleSolutions + words.valid.filter((w) => match(w)).length;
 		}
 	}
 
@@ -58,9 +58,9 @@
 	}
 
 	function swipeEnd(e: TouchEvent) {
-		let deltaX = e.changedTouches[0].clientX - startX;
-		let deltaY = e.changedTouches[0].clientY - startY;
-		let elapsed = Date.now() - startTime;
+		const deltaX = e.changedTouches[0].clientX - startX;
+		const deltaY = e.changedTouches[0].clientY - startY;
+		const elapsed = Date.now() - startTime;
 		if (elapsed > maxSwipePeriod) return;
 		if (Math.abs(deltaX) >= swipeThreshold && Math.abs(deltaY) < swipeTolerance) {
 			dispatch("swipe", { direction: deltaX < 0 ? "left" : "right" });
@@ -69,7 +69,7 @@
 </script>
 
 {#if showCtx}
-	<ContextMenu {pAns} {pSols} {x} {y} {word} />
+	<ContextMenu {possibleSolutions} {validGuesses} {x} {y} {word} />
 {/if}
 
 <div class="board" on:touchstart={swipeStart} on:touchend={swipeEnd} on:touchmove|preventDefault>
