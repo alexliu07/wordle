@@ -50,6 +50,8 @@
 	}
 	.fullscreen.overlay {
 		background: var(--bg-primary);
+		display: flex;
+		justify-content: center;
 	}
 	.modal {
 		margin: auto;
