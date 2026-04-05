@@ -6,13 +6,13 @@ on:
 
 jobs:
   deploy:
-    runs-on: ubuntu-20.04
+    runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v2
-      - name: install node v16
-        uses: actions/setup-node@v1
+      - uses: actions/checkout@v6
+      - name: install node v24
+        uses: actions/setup-node@v6
         with:
-          node-version: 16
+          node-version: 24
       - name: install dependencies
         run: npm i
       - name: compile
