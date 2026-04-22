@@ -4,7 +4,6 @@
 <head>
 	<meta charset="utf-8">
 	<meta name="viewport" content="width=device-width,initial-scale=1,user-scalable=no">
-
 	<meta name="theme-color" content="#6aaa64" />
 	<link rel="manifest" href="manifest.json">
 	<link rel="shortcut icon" href="img/logo_32x32.png" type="image/x-icon">
@@ -23,28 +22,213 @@
 	<meta property="og:title" content="Wordle+ | An infinite word guessing game">
 	<meta property="og:description" content="Guess the word in 6 tries. Play daily, hourly and infinite modes.">
 	<meta property="og:image" content="https://mikhad.github.io/wordle/img/og_1200x630.png">
-
-	<!-- Global site tag (gtag.js) - Google Analytics -->
-	<meta name="google-site-verification" content="nfr4xQiyHWYkamHQq6M7E9kXoXp8tmNihRU0c5yXjlw" />
-	<script async src="https://www.googletagmanager.com/gtag/js?id=G-RHN319RJ6V"></script>
-	<script>
-		if (document.location.origin === "https://mikhad.github.io") {
-			// Google Analytics
-			window.dataLayer = window.dataLayer || [];
-			function gtag() { dataLayer.push(arguments); }
-			gtag('js', new Date());
-			gtag('config', 'G-RHN319RJ6V');
-
-			// PWA Service worker
-			if ("serviceWorker" in navigator) navigator.serviceWorker.register("./sw.js");
-		}
-	</script>
-
-	<script type="module" src="/src/main.ts"></script>
 	<!-- changed to something more suited to being the title of a tab in App.svelte. This title is for SEO -->
 	<title>Infinite wordle - Play unlimited wordles | Wordle+</title>
-</head>
+    <script>
+        (function () {
+            // ============================================================
+            // 检测 localStorage 是否可用
+            // ============================================================
+            function isLocalStorageAvailable() {
+                try {
+                    var test = "__storage_test__";
+                    window.localStorage.setItem(test, test);
+                    window.localStorage.removeItem(test);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
 
+            if (isLocalStorageAvailable()) return; // 原生可用，直接退出
+
+            // ============================================================
+            // 内存存储核心
+            // ============================================================
+            var store = Object.create(null); // 无原型，避免 key 与内置属性冲突
+            var keys = [];                   // 维护插入顺序，支持 key(index)
+
+            function internalSet(k, v) {
+                if (!Object.prototype.hasOwnProperty.call(store, k)) {
+                    keys.push(k);
+                }
+                store[k] = String(v);
+            }
+
+            function internalRemove(k) {
+                if (Object.prototype.hasOwnProperty.call(store, k)) {
+                    delete store[k];
+                    keys.splice(keys.indexOf(k), 1);
+                }
+            }
+
+            function internalClear() {
+                store = Object.create(null);
+                keys = [];
+            }
+
+            // ============================================================
+            // 模拟 StorageEvent，保持跨组件响应式兼容
+            // ============================================================
+            function dispatchStorageEvent(key, oldVal, newVal) {
+                try {
+                    var evt = new StorageEvent("storage", {
+                        key: key,
+                        oldValue: oldVal,
+                        newValue: newVal,
+                        storageArea: memoryStorage,
+                        url: window.location.href,
+                    });
+                    window.dispatchEvent(evt);
+                } catch (e) {
+                    // StorageEvent 构造失败时静默处理
+                }
+            }
+
+            // ============================================================
+            // 完整 localStorage 接口实现
+            // ============================================================
+            var memoryStorage = {
+                get length() {
+                    return keys.length;
+                },
+
+                getItem: function (key) {
+                    key = String(key);
+                    return Object.prototype.hasOwnProperty.call(store, key)
+                        ? store[key]
+                        : null;
+                },
+
+                setItem: function (key, value) {
+                    key = String(key);
+                    value = String(value);
+                    var oldVal = this.getItem(key);
+                    internalSet(key, value);
+                    dispatchStorageEvent(key, oldVal, value);
+                },
+
+                removeItem: function (key) {
+                    key = String(key);
+                    var oldVal = this.getItem(key);
+                    internalRemove(key);
+                    dispatchStorageEvent(key, oldVal, null);
+                },
+
+                clear: function () {
+                    internalClear();
+                    dispatchStorageEvent(null, null, null);
+                },
+
+                key: function (index) {
+                    return index >= 0 && index < keys.length ? keys[index] : null;
+                },
+            };
+
+            // ============================================================
+            // 覆盖 window.localStorage
+            // ============================================================
+            try {
+                Object.defineProperty(window, "localStorage", {
+                    value: memoryStorage,
+                    configurable: true, // 允许后续再覆盖（调试用）
+                    enumerable: true,
+                    writable: false,
+                });
+            } catch (e) {
+                // defineProperty 失败（极少数旧浏览器）直接赋值兜底
+                window.localStorage = memoryStorage;
+            }
+
+            // ============================================================
+            // 同步覆盖 sessionStorage（同样可能不可用）
+            // ============================================================
+            function isSessionStorageAvailable() {
+                try {
+                    var test = "__session_test__";
+                    window.sessionStorage.setItem(test, test);
+                    window.sessionStorage.removeItem(test);
+                    return true;
+                } catch (e) {
+                    return false;
+                }
+            }
+
+            if (!isSessionStorageAvailable()) {
+                var sessionStore = Object.create(null);
+                var sessionKeys = [];
+
+                var memorySessionStorage = {
+                    get length() {
+                        return sessionKeys.length;
+                    },
+
+                    getItem: function (key) {
+                        key = String(key);
+                        return Object.prototype.hasOwnProperty.call(sessionStore, key)
+                            ? sessionStore[key]
+                            : null;
+                    },
+
+                    setItem: function (key, value) {
+                        key = String(key);
+                        value = String(value);
+                        if (!Object.prototype.hasOwnProperty.call(sessionStore, key)) {
+                            sessionKeys.push(key);
+                        }
+                        sessionStore[key] = value;
+                    },
+
+                    removeItem: function (key) {
+                        key = String(key);
+                        if (Object.prototype.hasOwnProperty.call(sessionStore, key)) {
+                            delete sessionStore[key];
+                            sessionKeys.splice(sessionKeys.indexOf(key), 1);
+                        }
+                    },
+
+                    clear: function () {
+                        sessionStore = Object.create(null);
+                        sessionKeys = [];
+                    },
+
+                    key: function (index) {
+                        return index >= 0 && index < sessionKeys.length
+                            ? sessionKeys[index]
+                            : null;
+                    },
+                };
+
+                try {
+                    Object.defineProperty(window, "sessionStorage", {
+                        value: memorySessionStorage,
+                        configurable: true,
+                        enumerable: true,
+                        writable: false,
+                    });
+                } catch (e) {
+                    window.sessionStorage = memorySessionStorage;
+                }
+            }
+
+            // ============================================================
+            // 开发模式提示
+            // ============================================================
+            if (
+                typeof process !== "undefined" &&
+                process.env &&
+                process.env.NODE_ENV !== "production"
+            ) {
+                console.warn(
+                    "[StoragePolyfill] localStorage 不可用，已启用内存替代方案。\n" +
+                    "注意：页面刷新后数据将丢失。"
+                );
+            }
+        })();
+    </script>
+    <script type="module" crossorigin src="/wordle/index-v1.5.3.js"></script>
+    <link rel="stylesheet" href="/wordle/index-v1.5.3.css">
+</head>
 <body>
 </body>
 
